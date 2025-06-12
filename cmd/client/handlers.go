@@ -43,21 +43,50 @@ func handlerMove(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogi
 }
 
 // handlerWar processes war declarations and determines the outcome of the war
-func handlerWar(gs *gamelogic.GameState) func(dw gamelogic.RecognitionOfWar) pubsub.Acktype {
+func handlerWar(gs *gamelogic.GameState, publishCh *amqp.Channel) func(dw gamelogic.RecognitionOfWar) pubsub.Acktype {
 	// Handle the war declaration and determine the outcome
 	return func(dw gamelogic.RecognitionOfWar) pubsub.Acktype {
-		defer fmt.Print("> ")                // Print a prompt after handling the war declaration
-		warOutcome, _, _ := gs.HandleWar(dw) // Handle the war declaration and get the outcome
+		// Print a prompt after handling the war declaration
+		defer fmt.Print("> ")
+		// Handle the war declaration and get the outcome
+		warOutcome, winner, loser := gs.HandleWar(dw)
 		switch warOutcome {
 		case gamelogic.WarOutcomeNotInvolved:
 			return pubsub.NackRequeue // Requeue the message for later processing
 		case gamelogic.WarOutcomeNoUnits:
 			return pubsub.NackDiscard // Discard the message if there are no units involved in the war
 		case gamelogic.WarOutcomeOpponentWon:
+			err := publishGameLog(
+				publishCh,
+				gs.GetUsername(),
+				fmt.Sprintf("%s won a war against %s", winner, loser),
+			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack // Acknowledge the message if the opponent won
 		case gamelogic.WarOutcomeYouWon:
+			err := publishGameLog(
+				publishCh,
+				gs.GetUsername(),
+				fmt.Sprintf("%s won a war against %s", winner, loser),
+			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack // Acknowledge the message if you won the war
 		case gamelogic.WarOutcomeDraw:
+			err := publishGameLog(
+				publishCh,
+				gs.GetUsername(),
+				fmt.Sprintf("A war between %s and %s resulted in a draw", winner, loser),
+			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+				return pubsub.NackRequeue
+			}
 			return pubsub.Ack // Acknowledge the message if the war ended in a draw
 		}
 
