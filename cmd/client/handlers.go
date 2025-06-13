@@ -3,13 +3,12 @@ package main
 import (
 	"fmt"
 
-	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic" // Import the gamelogic package for game state management
-	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"    // Import the pubsub package for message handling
-	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"   // Import the routing package for routing keys
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// handlerMove processes army moves and handles the outcomes of those moves
 func handlerMove(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogic.ArmyMove) pubsub.Acktype {
 	return func(move gamelogic.ArmyMove) pubsub.Acktype {
 		defer fmt.Print("> ")
@@ -17,7 +16,7 @@ func handlerMove(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogi
 		moveOutcome := gs.HandleMove(move)
 		switch moveOutcome {
 		case gamelogic.MoveOutcomeSamePlayer:
-			return pubsub.NackDiscard
+			return pubsub.Ack
 		case gamelogic.MoveOutComeSafe:
 			return pubsub.Ack
 		case gamelogic.MoveOutcomeMakeWar:
@@ -42,19 +41,15 @@ func handlerMove(gs *gamelogic.GameState, publishCh *amqp.Channel) func(gamelogi
 	}
 }
 
-// handlerWar processes war declarations and determines the outcome of the war
 func handlerWar(gs *gamelogic.GameState, publishCh *amqp.Channel) func(dw gamelogic.RecognitionOfWar) pubsub.Acktype {
-	// Handle the war declaration and determine the outcome
 	return func(dw gamelogic.RecognitionOfWar) pubsub.Acktype {
-		// Print a prompt after handling the war declaration
 		defer fmt.Print("> ")
-		// Handle the war declaration and get the outcome
 		warOutcome, winner, loser := gs.HandleWar(dw)
 		switch warOutcome {
 		case gamelogic.WarOutcomeNotInvolved:
-			return pubsub.NackRequeue // Requeue the message for later processing
+			return pubsub.NackRequeue
 		case gamelogic.WarOutcomeNoUnits:
-			return pubsub.NackDiscard // Discard the message if there are no units involved in the war
+			return pubsub.NackDiscard
 		case gamelogic.WarOutcomeOpponentWon:
 			err := publishGameLog(
 				publishCh,
@@ -65,7 +60,7 @@ func handlerWar(gs *gamelogic.GameState, publishCh *amqp.Channel) func(dw gamelo
 				fmt.Printf("error: %s\n", err)
 				return pubsub.NackRequeue
 			}
-			return pubsub.Ack // Acknowledge the message if the opponent won
+			return pubsub.Ack
 		case gamelogic.WarOutcomeYouWon:
 			err := publishGameLog(
 				publishCh,
@@ -76,7 +71,7 @@ func handlerWar(gs *gamelogic.GameState, publishCh *amqp.Channel) func(dw gamelo
 				fmt.Printf("error: %s\n", err)
 				return pubsub.NackRequeue
 			}
-			return pubsub.Ack // Acknowledge the message if you won the war
+			return pubsub.Ack
 		case gamelogic.WarOutcomeDraw:
 			err := publishGameLog(
 				publishCh,
@@ -87,7 +82,7 @@ func handlerWar(gs *gamelogic.GameState, publishCh *amqp.Channel) func(dw gamelo
 				fmt.Printf("error: %s\n", err)
 				return pubsub.NackRequeue
 			}
-			return pubsub.Ack // Acknowledge the message if the war ended in a draw
+			return pubsub.Ack
 		}
 
 		fmt.Println("error: unknown war outcome")
@@ -95,9 +90,7 @@ func handlerWar(gs *gamelogic.GameState, publishCh *amqp.Channel) func(dw gamelo
 	}
 }
 
-// handlerPause processes pause requests and updates the game state accordingly
 func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) pubsub.Acktype {
-	// Handle the pause request and update the game state accordingly
 	return func(ps routing.PlayingState) pubsub.Acktype {
 		defer fmt.Print("> ")
 		gs.HandlePause(ps)

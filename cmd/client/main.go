@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
@@ -27,14 +28,12 @@ func main() {
 		log.Fatalf("could not create channel: %v", err)
 	}
 
-	username, err := gamelogic.ClientWelcome() // Get the username from the user
-	// and create a new game state
+	username, err := gamelogic.ClientWelcome()
 	if err != nil {
 		log.Fatalf("could not get username: %v", err)
 	}
 	gs := gamelogic.NewGameState(username)
 
-	// Subscribe to the game state updates
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilTopic,
@@ -46,7 +45,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not subscribe to army moves: %v", err)
 	}
-	// Subscribe to war declarations
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilTopic,
@@ -58,7 +56,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not subscribe to war declarations: %v", err)
 	}
-	// Subscribe to game state updates
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
@@ -72,7 +69,6 @@ func main() {
 	}
 
 	for {
-		// Read user input
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
 			continue
@@ -107,8 +103,23 @@ func main() {
 		case "help":
 			gamelogic.PrintClientHelp()
 		case "spam":
-			// TODO: publish n malicious logs
-			fmt.Println("Spamming not allowed yet!")
+			if len(words) < 2 {
+				fmt.Println("usage: spam <n>")
+				continue
+			}
+			n, err := strconv.Atoi(words[1])
+			if err != nil {
+				fmt.Printf("error: %s is not a valid number\n", words[1])
+				continue
+			}
+			for i := 0; i < n; i++ {
+				msg := gamelogic.GetMaliciousLog()
+				err = publishGameLog(publishCh, username, msg)
+				if err != nil {
+					fmt.Printf("error publishing malicious log: %s\n", err)
+				}
+			}
+			fmt.Printf("Published %v malicious logs\n", n)
 		case "quit":
 			gamelogic.PrintQuit()
 			return
